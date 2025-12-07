@@ -3,7 +3,7 @@ import heapq
 import math
 from .agent import Agent
 from .structs import FrameData, GameAction, GameState
-
+from .pathfinder import a_star_search
 # --- SYSTEM 1: INTUITION ENGINE (BitNet Stub) ---
 class IntuitionEngine:
     def __init__(self):
