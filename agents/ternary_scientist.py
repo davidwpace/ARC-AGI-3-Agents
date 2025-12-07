@@ -4,31 +4,55 @@ import math
 from .agent import Agent
 from .structs import FrameData, GameAction, GameState
 from .pathfinder import a_star_search
+
 # --- SYSTEM 1: INTUITION ENGINE (BitNet Stub) ---
 class IntuitionEngine:
     def __init__(self):
-        # In the future, load your quantized BitNet model here
+        # We will track 'known_rules' to build our world model
         self.known_rules = {} 
 
     def analyze_frame_diff(self, prev_frame, curr_frame, action_taken):
         """
-        BitNet looks at 'What changed?' to infer rules.
+        Compares two frames to deduce the effect of the last action.
         """
-        if prev_frame is None: return
+        if prev_frame is None: return None
         
-        # Simple heuristic: If we moved but position didn't change, it's a wall.
-        # Your BitNet model will eventually replace this with deep visual intuition.
-        p_grid = prev_frame.state['grid'] # Pseudo-code access
-        c_grid = curr_frame.state['grid']
+        # 1. EXTRACT GRIDS
+        p_grid = prev_frame.state.get('grid')
+        c_grid = curr_frame.state.get('grid')
         
-        # Example Hypothesis Generation
+        # 2. DETECT COLLISION (Wall Logic)
         if p_grid == c_grid:
-            return {"type": "collision", "tile_value": self._get_target_tile(prev_frame, action_taken)}
+            target_pos = self._calculate_target_pos(prev_frame, action_taken)
+            if target_pos:
+                tile_val = self._get_tile_value(p_grid, target_pos)
+                return {"type": "collision", "tile_value": tile_val, "pos": target_pos}
         return None
 
-    def _get_target_tile(self, frame, action):
-        # Helper to find what tile we tried to step on
-        return 1 # Placeholder for 'Blue Tile'
+    def _get_player_pos(self, grid):
+        """
+        Scans the grid to find the player. 
+        In Locksmith, the player is often the only unique non-background, non-wall entity.
+        For now, we return (0,0) as a placeholder until we know the player's color ID.
+        """
+        return (0, 0) # Placeholder
+
+    def _calculate_target_pos(self, frame, action):
+        """
+        Predicts where the player WANTED to go.
+        """
+        px, py = self._get_player_pos(frame.state.get('grid'))
+        if action == GameAction.UP:    return (px, py - 1)
+        if action == GameAction.DOWN:  return (px, py + 1)
+        if action == GameAction.LEFT:  return (px - 1, py)
+        if action == GameAction.RIGHT: return (px + 1, py)
+        return (px, py)
+
+    def _get_tile_value(self, grid, pos):
+        x, y = pos
+        if 0 <= y < len(grid) and 0 <= x < len(grid[0]):
+            return grid[y][x]
+        return -1 # Out of bounds
 
 # --- SYSTEM 2: VERIFICATION ENGINE (Planner) ---
 class VerificationEngine:
@@ -70,34 +94,41 @@ class TernaryReasonerAgent(Agent):
 
     def choose_action(self, frames: list[FrameData], latest_frame: FrameData) -> GameAction:
         # 1. OBSERVATION PHASE
-        # Update our mental model based on the result of the LAST action
         if len(frames) > 1:
             hypothesis = self.sys1.analyze_frame_diff(frames[-2], latest_frame, self.last_action)
             if hypothesis and hypothesis['type'] == 'collision':
                 print(f"[Scientist] Hypothesis Confirmed: Tile {hypothesis['tile_value']} is a WALL.")
                 self.world_model['walls'].append(hypothesis['tile_value'])
 
-        # 2. PLANNING PHASE (System 2)
-        # If we have a valid plan, execute it.
+        # 2. EXECUTION PHASE (Follow the Plan)
         if self.current_plan:
-            action = self.current_plan.pop(0)
-            self.last_action = action
-            return action
+            return self.current_plan.pop(0)
 
-        # 3. HYPOTHESIS PHASE (System 1)
-        # If no plan, we need to formulate a new one.
-        # "I want to reach the goal. Does my world model allow a path?"
-        # For 'Locksmith', we define the Goal as the Lock.
+        # 3. PLANNING PHASE (Formulate a Plan)
+        grid = latest_frame.state.get('grid')
         
-        # If model is uncertain, EXPLORE (Random / BitNet suggestion)
-        # If model is certain, EXPLOIT (A* Path to goal)
-        if random.random() < 0.2: # 20% Curiosity rate
-             print("[Scientist] Exploring to test physics...")
-             action = random.choice([a for a in GameAction if a.value <= 4]) # Move actions
-        else:
-             print("[Scientist] Executing optimal path...")
-             # Here we would call self.sys2.plan_path()
-             action = random.choice([GameAction.RIGHT, GameAction.DOWN]) # Drift towards goal
+        # A. Find where we are
+        start_pos = self.sys1._get_player_pos(grid) 
+        
+        # B. Find where the LOCK is (Scanning for the unique goal tile)
+        goal_pos = None
+        if grid:
+            for y in range(len(grid)):
+                for x in range(len(grid[0])):
+                    val = grid[y][x]
+                    # Heuristic: If it's not background(0) and not us, it might be the goal
+                    if val != 0 and (x,y) != start_pos and val not in self.world_model['walls']:
+                        goal_pos = (x, y)
+                        break 
+                if goal_pos: break
 
-        self.last_action = action
-        return action
+        # C. Generate Path
+        if start_pos and goal_pos:
+             print(f"[Scientist] Planning path from {start_pos} to {goal_pos}...")
+             new_path = self.sys2.plan_path(start_pos, goal_pos, self.world_model)
+             if new_path:
+                 self.current_plan = new_path
+                 return self.current_plan.pop(0)
+                 
+        # D. Fallback (If no plan found, explore randomly)
+        return GameAction.RIGHT
