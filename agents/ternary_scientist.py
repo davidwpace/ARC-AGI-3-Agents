@@ -34,10 +34,23 @@ class IntuitionEngine:
 class VerificationEngine:
     def plan_path(self, start_pos, goal_pos, world_model):
         """
-        A* Pathfinding that uses the 'World Model' built by System 1.
+        Uses A* to find the optimal path based on current beliefs.
         """
-        # If System 1 says 'Blue is Lava', the planner avoids Blue.
-        return [GameAction.RIGHT, GameAction.RIGHT, GameAction.UP] # Mock Plan
+        print(f"[System 2] Planning path from {start_pos} to {goal_pos}...")
+        
+        # Extract constraints from World Model
+        walls = set(world_model.get("walls", []))
+        hazards = set(world_model.get("hazards", []))
+        
+        # Execute Search
+        path = a_star_search(start_pos, goal_pos, walls, hazards)
+        
+        if path:
+            print(f"[System 2] Path found! Length: {len(path)} steps.")
+        else:
+            print("[System 2] No path found. Target might be unreachable.")
+            
+        return path
 
 # --- THE AGENT ---
 class TernaryReasonerAgent(Agent):
