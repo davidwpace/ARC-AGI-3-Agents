@@ -1,7 +1,7 @@
 from typing import Type, cast
 
 from dotenv import load_dotenv
-
+from .ternary_scientist import TernaryReasonerAgent
 from .agent import Agent, Playback
 from .recorder import Recorder
 from .swarm import Swarm
@@ -24,7 +24,7 @@ AVAILABLE_AGENTS: dict[str, Type[Agent]] = {
 # add all the recording files as valid agent names
 for rec in Recorder.list():
     AVAILABLE_AGENTS[rec] = Playback
-
+TernaryReasonerAgent
 # update the agent dictionary to include subclasses of LLM class
 AVAILABLE_AGENTS["reasoningagent"] = ReasoningAgent
 
